@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CVS - Smart Candy Card Registration</title>
+<style>
+    :root {
+        --violet: #1A052A;
+        --pink: #E83984;
+        --cyan: #00FFFF;
+        --magenta: #FF00FF;
+        --glass-bg: rgba(255, 255, 255, 0.08);
+        --glass-border: rgba(255, 255, 255, 0.15);
+        --neon-glow: rgba(0, 255, 255, 0.4);
+    }
+
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+        background: linear-gradient(135deg, var(--violet) 0%, #300C4D 50%, var(--pink) 100%);
+        color: white;
+        min-height: 100vh;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* Ambient Background Animations */
+    .ambient-blobs {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        z-index: 0;
+        pointer-events: none;
+    }
+
+    .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: 0.5;
+        animation: drift 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .blob-1 { top: -20%; left: -10%; width: 60vw; height: 60vw; background: var(--magenta); }
+    .blob-2 { bottom: -20%; right: -10%; width: 50vw; height: 50vw; background: var(--cyan); animation-delay: -5s; }
+    .blob-3 { top: 40%; left: 30%; width: 40vw; height: 40vw; background: #FFB6C1; animation-delay: -10s; opacity: 0.3; }
+
+    @keyframes drift {
+        0% { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(15%, 15%) scale(1.2); }
+    }
+
+    /* Splash Screen */
+    #splash-screen {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(circle at center, #2a0845 0%, #000000 100%);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: opacity 0.8s ease-in-out, visibility 0.8s;
+    }
+
+    .splash-logo-wrapper {
+        position: relative;
+        width: 250px;
+        height: 250px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        animation: breathe 2.5s infinite ease-in-out;
+    }
+
+    .splash-logo-half {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transition: transform 1s cubic-bezier(0.8, 0, 0.2, 1), opacity 0.8s;
+        z-index: 3;
+        filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.3));
+    }
+
+    .logo-left { clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%); }
+    .logo-right { clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
+
+    .vault-burst {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff 0%, var(--cyan) 30%, transparent 70%);
+        opacity: 0;
+        transform: scale(0.1);
+        z-index: 2;
+        transition: all 1s cubic-bezier(0.1, 0.9, 0.2, 1);
+        box-shadow: 0 0 100px var(--cyan), 0 0 200px var(--magenta);
+    }
+
+    .light-sweep {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+        transform: translateX(-100%);
+        z-index: 4;
+    }
+
+    #splash-screen.split .logo-left { transform: translateX(-100vw) rotate(-20deg); opacity: 0; }
+    #splash-screen.split .logo-right { transform: translateX(100vw) rotate(20deg); opacity: 0; }
+    #splash-screen.split .vault-burst { opacity: 1; transform: scale(15); }
+    #splash-screen.split .light-sweep { animation: sweep 1s forwards; }
+    #splash-screen.hidden { opacity: 0; visibility: hidden; }
+
+    @keyframes breathe {
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+        50% { transform: scale(1.03); filter: drop-shadow(0 0 25px rgba(255,255,255,0.5)); }
+    }
+    @keyframes sweep {
+        100% { transform: translateX(100%); }
+    }
+
+    /* Main Application Panel */
+    #app-container {
+        position: relative;
+        z-index: 10;
+        width: 90%;
+        max-width: 520px;
+        background: var(--glass-bg);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        padding: 35px 30px;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.3), inset 0 0 20px rgba(255,255,255,0.05);
+        opacity: 0;
+        transform: translateY(60px);
+        transition: all 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        overflow: hidden;
+    }
+
+    #app-container.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* Animated Neon Border Shimmer */
+    #app-container::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 24px;
+        padding: 2px;
+        background: linear-gradient(45deg, transparent 40%, var(--cyan) 50%, transparent 60%);
+        background-size: 200% 200%;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        pointer-events: none;
+        animation: border-shimmer 4s linear infinite;
+    }
+
+    @keyframes border-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* Header */
+    .header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 35px;
+    }
+
+    .header img {
+        width: 48px;
+        height: 48px;
+        filter: drop-shadow(0 0 8px rgba(255,255,255,0.4));
+    }
+
+    .header-text h1 {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        margin: 0;
+        background: linear-gradient(90deg, #FFFFFF, var(--cyan));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        position: relative;
+        display: inline-block;
+    }
+
+    .header-text h1::after {
+        content: '';
+        position: absolute;
+        bottom: -3px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: var(--cyan);
+        box-shadow: 0 0 10px var(--cyan);
+        animation: pulse-glow 2s infinite alternate;
+    }
+
+    .header-text p {
+        font-size: 13px;
+        color: rgba(255,255,255,0.7);
+        margin-top: 6px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+    }
+
+    @keyframes pulse-glow {
+        0% { opacity: 0.4; }
+        100% { opacity: 1; box-shadow: 0 0 15px var(--cyan); }
+    }
+
+    /* Form */
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 24px;
+    }
+
+    .form-group label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: rgba(255,255,255,0.85);
+        margin-left: 4px;
+    }
+
+    .input-glass {
+        background: rgba(0,0,0,0.25);
+        border: 1px solid rgba(255,255,255,0.15);
+        padding: 16px 20px;
+        border-radius: 14px;
+        color: #FFFFFF;
+        font-size: 16px;
+        font-weight: 500;
+        outline: none;
+        transition: all 0.3s ease;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        appearance: none;
+    }
+
+    .input-glass:focus {
+        border-color: var(--cyan);
+        background: rgba(0,0,0,0.4);
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 0 15px rgba(0,255,255,0.2);
+    }
+
+    /* FIXED: Corrected the corrupted SVG data URI */
+    select.input-glass {
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 20px center;
+        padding-right: 40px;
+    }
+    
+    select.input-glass option {
+        background: var(--violet);
+        color: white;
+        padding: 10px;
+    }
+
+    .invalid {
+        border-color: #FF3B30 !important;
+        box-shadow: 0 0 15px rgba(255,59,48,0.3) !important;
+        animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    /* Button */
+    .btn-submit {
+        width: 100%;
+        background: linear-gradient(135deg, var(--cyan), var(--magenta));
+        border: none;
+        padding: 18px;
+        border-radius: 14px;
+        color: white;
+        font-size: 16px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        box-shadow: 0 8px 25px rgba(255, 0, 255, 0.3);
+        margin-top: 10px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn-submit::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%; width: 50%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        transform: skewX(-20deg);
+        transition: 0.5s;
+    }
+
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(255, 0, 255, 0.5);
+    }
+
+    .btn-submit:hover::after { left: 200%; }
+
+    .btn-submit:active {
+        transform: scale(0.97);
+        box-shadow: 0 4px 15px rgba(255, 0, 255, 0.3);
+    }
+
+    .btn-submit:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* Partner Logos */
+    .partner-logos {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        margin-top: 30px;
+        opacity: 0.6;
+    }
+    .partner-logos img { height: 24px; filter: grayscale(100%) brightness(200%); }
+
+    /* Modal Overlay */
+    #modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        z-index: 999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.4s ease;
+    }
+
+    #modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .modal-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        padding: 40px 30px;
+        border-radius: 24px;
+        text-align: center;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+        transform: scale(0.9);
+        transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }
+
+    #modal-overlay.active .modal-card { transform: scale(1); }
+
+    .loader-ring {
+        width: 70px;
+        height: 70px;
+        border: 4px solid rgba(255,255,255,0.1);
+        border-top-color: var(--cyan);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        box-shadow: 0 0 20px rgba(0,255,255,0.2);
+    }
+
+    .modal-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+        letter-spacing: 0.5px;
+    }
+
+    .uid-value {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--cyan);
+        text-shadow: 0 0 15px var(--cyan);
+        margin: 10px 0;
+        letter-spacing: 2px;
+    }
+
+    .candy-amount {
+        font-size: 38px;
+        font-weight: 900;
+        color: var(--magenta);
+        text-shadow: 0 0 20px rgba(255,0,255,0.6);
+        margin-bottom: 10px;
+    }
+
+    .icon-success {
+        width: 70px;
+        height: 70px;
+        background: #34C759;
+        border-radius: 50%;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 0 30px rgba(52, 199, 89, 0.5);
+        animation: popIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .icon-success::after {
+        content: '✓';
+        color: white;
+        font-size: 36px;
+        font-weight: bold;
+    }
+
+    .modal-card.error-state {
+        border-color: #FF3B30;
+        box-shadow: 0 0 40px rgba(255, 59, 48, 0.4);
+    }
+    
+    .modal-card.error-state .loader-ring { display: none; }
+    .icon-error {
+        width: 70px;
+        height: 70px;
+        background: #FF3B30;
+        border-radius: 50%;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 0 30px rgba(255, 59, 48, 0.5);
+        animation: popIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .icon-error::after {
+        content: '✕';
+        color: white;
+        font-size: 36px;
+        font-weight: bold;
+    }
+    .modal-card.error-state .icon-error { display: flex; }
+
+    /* Warning Banner */
+    .warning-banner {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translate(-50%, -150%);
+        background: rgba(255, 149, 0, 0.15);
+        backdrop-filter: blur(10px);
+        border: 1px solid #FF9500;
+        color: #FF9500;
+        padding: 14px 24px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 14px;
+        box-shadow: 0 10px 25px rgba(255, 149, 0, 0.2);
+        transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .warning-banner.show { transform: translate(-50%, 0); }
+
+    /* Animations */
+    @keyframes shake {
+        10%, 90% { transform: translateX(-2px); }
+        20%, 80% { transform: translateX(3px); }
+        30%, 50%, 70% { transform: translateX(-5px); }
+        40%, 60% { transform: translateX(5px); }
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+    @media (max-width: 480px) {
+        #app-container { padding: 25px 20px; }
+        .header-text h1 { font-size: 18px; }
+        .candy-amount { font-size: 30px; }
+    }
+</style>
+</head>
+<body>
+
+<div class="ambient-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+</div>
+
+<div id="splash-screen">
+    <div class="light-sweep"></div>
+    <div class="vault-burst"></div>
+    <div class="splash-logo-wrapper">
+        <img src="assets/logos/cvs%20full%20logo%20copy.svg" alt="CVS" class="splash-logo-half logo-left">
+        <img src="assets/logos/cvs%20full%20logo%20copy.svg" alt="CVS" class="splash-logo-half logo-right">
+    </div>
+</div>
+
+<div id="app-container">
+    <div class="header">
+        <img src="assets/logos/cvs%20short%20embled%20copy.svg" alt="CVS Emblem">
+        <div class="header-text">
+            <h1>Smart Candy Card</h1>
+            <p>Hungama 3.0 – Candyland Edition</p>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="childName">Child Name</label>
+        <input type="text" id="childName" class="input-glass" placeholder="Enter full name" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+        <label for="orgSelect">Organisation</label>
+        <select id="orgSelect" class="input-glass">
+            <option value="" disabled selected>Select an organisation...</option>
+            <option value="NEW_LIGHT">New Light</option>
+            <option value="BADAMI_DEVI">Badami Devi</option>
+            <option value="LORETO">Loreto</option>
+            <option value="PARK_CIRCUS">Park Circus</option>
+            <option value="LOTUS_RESCUE">Lotus Rescue</option>
+        </select>
+    </div>
+
+    <button id="btnAssign" class="btn-submit">Assign Candy Card</button>
+
+    <div class="partner-logos">
+        <img src="assets/logos/hungama%20logo%20copy.svg" alt="Hungama">
+        <img src="assets/logos/leo-logo.svg" alt="Leo">
+    </div>
+</div>
+
+<div id="modal-overlay">
+    <div class="modal-card" id="modalCard">
+        <div class="loader-ring" id="loaderRing"></div>
+        <div class="icon-success" id="iconSuccess"></div>
+        <div class="icon-error" id="iconError"></div>
+        <div class="uid-value" id="uidDisplay"></div>
+        <div class="candy-amount" id="candyCounter"></div>
+        <div class="modal-text" id="modalStatusText">Waiting for Card Tap...</div>
+    </div>
+</div>
+
+<div class="warning-banner" id="warningBanner">
+    <span>⚠️</span> <span id="warningText">Organisation quota exceeded</span>
+</div>
+
+<script type="module">
+    // FIXED: Corrected corrupted module import URLs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, increment, runTransaction, collection } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // Configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyA3CBPUVuYIQO6hVe_9azB0DybUvPMVSo4",
+        authDomain: "candyvault-hungama3.firebaseapp.com",
+        projectId: "candyvault-hungama3",
+        storageBucket: "candyvault-hungama3.firebasestorage.app",
+        messagingSenderId: "329773644616",
+        appId: "1:329773644616:web:dd26eac1982cce2e0a517d"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // DOM Elements
+    const splashScreen = document.getElementById('splash-screen');
+    const appContainer = document.getElementById('app-container');
+    const btnAssign = document.getElementById('btnAssign');
+    const childNameInput = document.getElementById('childName');
+    const orgSelect = document.getElementById('orgSelect');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalCard = document.getElementById('modalCard');
+    const modalStatusText = document.getElementById('modalStatusText');
+    const uidDisplay = document.getElementById('uidDisplay');
+    const candyCounter = document.getElementById('candyCounter');
+    const loaderRing = document.getElementById('loaderRing');
+    const iconSuccess = document.getElementById('iconSuccess');
+    const iconError = document.getElementById('iconError');
+    const warningBanner = document.getElementById('warningBanner');
+    const warningText = document.getElementById('warningText');
+
+    // State
+    let isModalActive = false;
+    let rfidBuffer = '';
+
+    // Splash Sequence
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            splashScreen.classList.add('split');
+            setTimeout(() => {
+                splashScreen.classList.add('hidden');
+                appContainer.classList.add('visible');
+                childNameInput.focus();
+            }, 900);
+        }, 2500);
+    });
+
+    // Form Validation & Modal Trigger
+    btnAssign.addEventListener('click', () => {
+        let isValid = true;
+        const name = childNameInput.value.trim();
+        const org = orgSelect.value;
+
+        if (!name) {
+            childNameInput.classList.add('invalid');
+            setTimeout(() => childNameInput.classList.remove('invalid'), 400);
+            isValid = false;
+        }
+        if (!org) {
+            orgSelect.classList.add('invalid');
+            setTimeout(() => orgSelect.classList.remove('invalid'), 400);
+            isValid = false;
+        }
+
+        if (isValid) {
+            initiateRFIDCapture();
+        }
+    });
+
+    function initiateRFIDCapture() {
+        isModalActive = true;
+        rfidBuffer = '';
+        
+        // Reset Modal UI
+        modalCard.classList.remove('error-state');
+        loaderRing.style.display = 'block';
+        iconSuccess.style.display = 'none';
+        iconError.style.display = 'none';
+        uidDisplay.innerText = '';
+        candyCounter.innerText = '';
+        modalStatusText.innerText = 'Waiting for Card Tap...';
+        modalStatusText.style.color = 'white';
+        
+        btnAssign.disabled = true;
+        modalOverlay.classList.add('active');
+    }
+
+    // RFID Keyboard Listener
+    window.addEventListener('keydown', (e) => {
+        if (!isModalActive) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const uid = rfidBuffer.trim();
+            rfidBuffer = '';
+            if (uid.length > 0) {
+                processRegistration(uid);
+            }
+        } else if (e.key.length === 1) {
+            rfidBuffer += e.key;
+        }
+    });
+
+    async function processRegistration(uid) {
+        isModalActive = false; // Stop accepting further input
+        
+        uidDisplay.innerText = `UID: ${uid}`;
+        modalStatusText.innerText = 'Loading 80,000 Candies...';
+        
+        const name = childNameInput.value.trim();
+        const org = orgSelect.value;
+        
+        // Visual Candy Counter Animation
+        await animateCounter(0, 80000, 1200);
+
+        try {
+            await runTransaction(db, async (transaction) => {
+                const playerRef = doc(db, 'players', uid);
+                const playerDoc = await transaction.get(playerRef);
+                
+                if (playerDoc.exists()) {
+                    throw new Error('ALREADY_REGISTERED');
+                }
+
+                const orgRef = doc(db, 'organisations', org);
+                const statsRef = doc(db, 'systemStats', 'live');
+                const txnRef = doc(collection(db, 'transactions'));
+
+                // 1. Create Player
+                transaction.set(playerRef, {
+                    rfidUID: uid,
+                    name: name,
+                    organisationId: org,
+                    balance: 80000,
+                    totalSpent: 0,
+                    totalEarned: 80000,
+                    createdAt: serverTimestamp()
+                });
+
+                // 2. Create Transaction Record
+                transaction.set(txnRef, {
+                    rfidUID: uid,
+                    playerName: name,
+                    organisationId: org,
+                    type: "registration",
+                    amount: 80000,
+                    performedByApp: "registration",
+                    timestamp: serverTimestamp()
+                });
+
+                // 3. Update Organisation
+                transaction.update(orgRef, {
+                    totalRegistered: increment(1),
+                    totalBalance: increment(80000)
+                });
+
+                // 4. Update System Stats
+                transaction.update(statsRef, {
+                    totalRegistrations: increment(1),
+                    totalCandiesInCirculation: increment(80000),
+                    totalTransactions: increment(1),
+                    lastUpdated: serverTimestamp()
+                });
+            });
+
+            // Success UI
+            loaderRing.style.display = 'none';
+            iconSuccess.style.display = 'flex';
+            modalStatusText.innerText = 'Registration Successful!';
+            modalStatusText.style.color = '#34C759';
+
+            // Check Quota Overrun Post-Transaction
+            checkOrganisationQuota(org);
+
+            // Auto Close & Reset
+            setTimeout(() => {
+                modalOverlay.classList.remove('active');
+                childNameInput.value = '';
+                orgSelect.value = '';
+                btnAssign.disabled = false;
+                childNameInput.focus();
+            }, 2000);
+
+        } catch (error) {
+            handleTransactionError(error);
+        }
+    }
+
+    function handleTransactionError(error) {
+        modalCard.classList.add('error-state');
+        loaderRing.style.display = 'none';
+        candyCounter.innerText = '';
+        
+        if (error.message === 'ALREADY_REGISTERED') {
+            modalStatusText.innerText = 'Card already registered!';
+        } else {
+            console.error("Firebase Error:", error);
+            modalStatusText.innerText = 'Network/System Error. Try Again.';
+        }
+
+        setTimeout(() => {
+            modalOverlay.classList.remove('active');
+            btnAssign.disabled = false;
+        }, 3000);
+    }
+
+    async function checkOrganisationQuota(orgId) {
+        try {
+            const orgRef = doc(db, 'organisations', orgId);
+            const orgSnap = await getDoc(orgRef);
+            
+            if (orgSnap.exists()) {
+                const data = orgSnap.data();
+                if (data.totalRegistered > (data.expectedCount || Infinity)) {
+                    warningText.innerText = `${orgId} quota exceeded (${data.totalRegistered}/${data.expectedCount})`;
+                    warningBanner.classList.add('show');
+                    setTimeout(() => warningBanner.classList.remove('show'), 6000);
+                }
+            }
+        } catch (e) {
+            console.warn("Quota check failed, proceeding safely.", e);
+        }
+    }
+
+    function animateCounter(start, end, duration) {
+        return new Promise(resolve => {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                // Easing: easeOutQuart
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+                const current = Math.floor(easeProgress * (end - start) + start);
+                candyCounter.innerText = current.toLocaleString() + ' 🍬';
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    candyCounter.innerText = end.toLocaleString() + ' 🍬';
+                    resolve();
+                }
+            };
+            window.requestAnimationFrame(step);
+        });
+    }
+</script>
+</body>
+</html>
