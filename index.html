@@ -262,7 +262,6 @@
         box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 0 15px rgba(0,255,255,0.2);
     }
 
-    /* FIXED: Corrected the corrupted SVG data URI */
     select.input-glass {
         cursor: pointer;
         background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -414,7 +413,20 @@
         font-weight: 900;
         color: var(--magenta);
         text-shadow: 0 0 20px rgba(255,0,255,0.6);
-        margin-bottom: 10px;
+        margin-bottom: 5px;
+    }
+    
+    .short-code-display {
+        font-size: 34px;
+        font-weight: 900;
+        color: #fff;
+        background: linear-gradient(135deg, var(--cyan), var(--magenta));
+        padding: 12px 24px;
+        border-radius: 12px;
+        letter-spacing: 6px;
+        box-shadow: 0 0 20px rgba(0,255,255,0.3);
+        animation: popIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        display: none;
     }
 
     .icon-success {
@@ -497,6 +509,7 @@
         #app-container { padding: 25px 20px; }
         .header-text h1 { font-size: 18px; }
         .candy-amount { font-size: 30px; }
+        .short-code-display { font-size: 28px; }
     }
 </style>
 </head>
@@ -512,14 +525,14 @@
     <div class="light-sweep"></div>
     <div class="vault-burst"></div>
     <div class="splash-logo-wrapper">
-        <img src="assets/logos/cvs%20full%20logo%20copy.svg" alt="CVS" class="splash-logo-half logo-left">
-        <img src="assets/logos/cvs%20full%20logo%20copy.svg" alt="CVS" class="splash-logo-half logo-right">
+        <img src="Assets/cvs%20full%20logo%20copy.svg" alt="CVS" class="splash-logo-half logo-left">
+        <img src="Assets/cvs%20full%20logo%20copy.svg" alt="CVS" class="splash-logo-half logo-right">
     </div>
 </div>
 
 <div id="app-container">
     <div class="header">
-        <img src="assets/logos/cvs%20short%20embled%20copy.svg" alt="CVS Emblem">
+        <img src="Assets/cvs%20short%20embled%20copy.svg" alt="CVS Emblem">
         <div class="header-text">
             <h1>Smart Candy Card</h1>
             <p>Hungama 3.0 – Candyland Edition</p>
@@ -546,8 +559,8 @@
     <button id="btnAssign" class="btn-submit">Assign Candy Card</button>
 
     <div class="partner-logos">
-        <img src="assets/logos/hungama%20logo%20copy.svg" alt="Hungama">
-        <img src="assets/logos/leo-logo.svg" alt="Leo">
+        <img src="Assets/hungama%20logo%20copy.svg" alt="Hungama">
+        <img src="Assets/leo-logo.svg" alt="Leo">
     </div>
 </div>
 
@@ -558,6 +571,7 @@
         <div class="icon-error" id="iconError"></div>
         <div class="uid-value" id="uidDisplay"></div>
         <div class="candy-amount" id="candyCounter"></div>
+        <div class="short-code-display" id="shortCodeDisplay"></div>
         <div class="modal-text" id="modalStatusText">Waiting for Card Tap...</div>
     </div>
 </div>
@@ -567,7 +581,6 @@
 </div>
 
 <script type="module">
-    // FIXED: Corrected corrupted module import URLs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, increment, runTransaction, collection } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -595,6 +608,7 @@
     const modalStatusText = document.getElementById('modalStatusText');
     const uidDisplay = document.getElementById('uidDisplay');
     const candyCounter = document.getElementById('candyCounter');
+    const shortCodeDisplay = document.getElementById('shortCodeDisplay');
     const loaderRing = document.getElementById('loaderRing');
     const iconSuccess = document.getElementById('iconSuccess');
     const iconError = document.getElementById('iconError');
@@ -648,6 +662,7 @@
         loaderRing.style.display = 'block';
         iconSuccess.style.display = 'none';
         iconError.style.display = 'none';
+        shortCodeDisplay.style.display = 'none';
         uidDisplay.innerText = '';
         candyCounter.innerText = '';
         modalStatusText.innerText = 'Waiting for Card Tap...';
@@ -686,7 +701,7 @@
         await animateCounter(0, 80000, 1200);
 
         try {
-            await runTransaction(db, async (transaction) => {
+            const generatedCode = await runTransaction(db, async (transaction) => {
                 const playerRef = doc(db, 'players', uid);
                 const playerDoc = await transaction.get(playerRef);
                 
@@ -698,11 +713,20 @@
                 const statsRef = doc(db, 'systemStats', 'live');
                 const txnRef = doc(collection(db, 'transactions'));
 
+                // Fetch stats to generate sequential short code
+                const statsDoc = await transaction.get(statsRef);
+                let currentCodeInt = 100; // Start sequentially at 100
+                if (statsDoc.exists() && statsDoc.data().lastAssignedCode !== undefined) {
+                    currentCodeInt = statsDoc.data().lastAssignedCode + 1;
+                }
+                const shortCode = String(currentCodeInt).padStart(3, '0');
+
                 // 1. Create Player
                 transaction.set(playerRef, {
                     rfidUID: uid,
                     name: name,
                     organisationId: org,
+                    shortCode: shortCode,
                     balance: 80000,
                     totalSpent: 0,
                     totalEarned: 80000,
@@ -721,18 +745,21 @@
                 });
 
                 // 3. Update Organisation
-                transaction.update(orgRef, {
+                transaction.set(orgRef, {
                     totalRegistered: increment(1),
                     totalBalance: increment(80000)
-                });
+                }, { merge: true });
 
-                // 4. Update System Stats
-                transaction.update(statsRef, {
+                // 4. Update System Stats & Last Code
+                transaction.set(statsRef, {
                     totalRegistrations: increment(1),
                     totalCandiesInCirculation: increment(80000),
                     totalTransactions: increment(1),
+                    lastAssignedCode: currentCodeInt,
                     lastUpdated: serverTimestamp()
-                });
+                }, { merge: true });
+
+                return shortCode;
             });
 
             // Success UI
@@ -740,18 +767,22 @@
             iconSuccess.style.display = 'flex';
             modalStatusText.innerText = 'Registration Successful!';
             modalStatusText.style.color = '#34C759';
+            
+            // Display Generated Short Code to be written down
+            shortCodeDisplay.innerText = generatedCode;
+            shortCodeDisplay.style.display = 'block';
 
             // Check Quota Overrun Post-Transaction
             checkOrganisationQuota(org);
 
-            // Auto Close & Reset
+            // Auto Close & Reset (Given 5 seconds to write down the code)
             setTimeout(() => {
                 modalOverlay.classList.remove('active');
                 childNameInput.value = '';
                 orgSelect.value = '';
                 btnAssign.disabled = false;
                 childNameInput.focus();
-            }, 2000);
+            }, 5000);
 
         } catch (error) {
             handleTransactionError(error);
@@ -800,7 +831,6 @@
             const step = (timestamp) => {
                 if (!startTimestamp) startTimestamp = timestamp;
                 const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                // Easing: easeOutQuart
                 const easeProgress = 1 - Math.pow(1 - progress, 4);
                 const current = Math.floor(easeProgress * (end - start) + start);
                 candyCounter.innerText = current.toLocaleString() + ' 🍬';
